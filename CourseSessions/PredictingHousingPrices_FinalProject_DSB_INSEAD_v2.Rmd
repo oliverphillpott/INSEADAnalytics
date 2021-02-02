@@ -45,6 +45,7 @@ library('gridExtra')
 library('corrplot') 
 library('GGally')
 library('e1071')
+install.packages("corrplot")
 
 ```
 
@@ -116,7 +117,41 @@ We also notice that the variable MSSubClass was parsed as numeric, but it is act
 
 ```{r eval = TRUE, echo=TRUE, comment=NA, warning=FALSE, message=FALSE,results='markup'}
 
-# Don't forget to add stuff here
+plot(SalePrice ~ LotArea, data= train) #plot of Sale Price vs. Lot Area in training data
+# This first graph lets us discover that there are many outliers that could get in the way of our prediction accuracy (mainly values over 700,000 and Lots with an area of 100,000 ft or more)
+
+plot(SalePrice ~ YearBuilt, data= train) #plot of Sale Price vs. Year that the house was built in training data
+
+plot(SalePrice ~ YearRemodAdd, data= train) #plot of Sale Price vs. Year the house was last remodelede in training data
+
+hist(train$SalePrice) #histogram of sales prices of houses
+
+#histogram shows us that the price of houses is skewed towards the left, with most houses being sold for under $200,000
+
+houses.train<-subset(train, Id<=1000)
+houses.predict<-subset(train, Id>=1000)
+
+fit<-lm(SalePrice ~ MSSubClass+LotFrontage+LotArea+OverallQual+OverallCond+YearBuilt+YearRemodAdd+MasVnrArea+BsmtFinSF1+BsmtFinSF2+BsmtUnfSF+TotalBsmtSF+X1stFlrSF+X2ndFlrSF+GrLivArea+BsmtFullBath+BsmtHalfBath+FullBath+HalfBath+BedroomAbvGr+KitchenAbvGr+TotRmsAbvGrd+Fireplaces+GarageYrBlt+GarageArea+WoodDeckSF+OpenPorchSF, data=houses.train)
+
+predicted.SalePrices<-predict(fit, houses.predict)
+
+plot(predicted.SalePrices ~ houses.predict$SalePrice) #plot predictions vs. values in testing data
+abline(0,0) #draw the line at 0
+
+summary(fit) #summary statistics of first linear regression
+
+par(mfrow=c(1,4))
+plot(fit)
+
+#Now we will transform our data into a data.Matrix in order to be able to take out the correlation matrix and identify variables with strong correlation
+outTRAIN <- data.matrix(train)
+
+library(corrplot) #call the library that will be used to plot the correlation matrix
+
+res <- cor(outTRAIN) #compute the correlation matrix in our training data and do case-wise deletion of missing variables
+round(res, 4) #make sure that the values in our correlation matrix are rounded to 4 decimal places
+
+
 
 ```
 
