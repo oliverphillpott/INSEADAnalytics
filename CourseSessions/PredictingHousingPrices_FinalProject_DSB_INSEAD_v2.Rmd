@@ -15,21 +15,21 @@ output:
 always_allow_html: yes
 ---
 
-# Section 0 
+# Section 0: Download library/ package
 Setup code.
 
 ```{r echo=FALSE, message=FALSE}
-make_pdf_file = 0 # SET THIS TO 1 IF WE COMPILE PDF FILE, 0 OTHERWISE (FOR HTML)
+#make_pdf_file = 0 # SET THIS TO 1 IF WE COMPILE PDF FILE, 0 OTHERWISE (FOR HTML)
 
-source("../AnalyticsLibraries/library.R")
-source("../AnalyticsLibraries/heatmapOutput.R")
+#source("../AnalyticsLibraries/library.R")
+#source("../AnalyticsLibraries/heatmapOutput.R")
 
 library('ggplot2')
 library('ggthemes') 
 library('scales')
 library('dplyr') 
 library('mice')
-library('randomForest') 
+library('randomForest')
 library('data.table')
 library('gridExtra')
 library('corrplot') 
@@ -58,20 +58,23 @@ The data set has been generated as an alternative for data scientists looking fo
 With 79 explanatory variables describing (almost) every aspect of residential homes in Ames, Iowa, this competition challenges participants to predict the final price of each home.
 
 
-
+# Read the training and testing data
 ``` {r echo=FALSE, message=FALSE}
 
+#train <-read.csv("train.csv", stringsAsFactors = F)
+#test  <-read.csv("test.csv", stringsAsFactors = F)
 train <-read.csv("../DATA/HousingData_Train.csv", stringsAsFactors = F)
 test  <-read.csv("../DATA/HousingData_Test.csv", stringsAsFactors = F)
 
+```
+
+# Section 2: Check and cleanse the data
+``` {r echo=FALSE, message=FALSE}
 ## Structure of the data
 
 dim(train)
 str(train)
-```
 
-
-``` {r echo=FALSE, message=FALSE}
 dim(test)
 str(test)
 ```
@@ -93,21 +96,8 @@ summary(train[,sapply(train[,1:81], typeof) == "integer"])
 
 Add analysis here.
 
-
-# Section 2: Check and cleanse the data
-
 In order to gain further insights into the structure of the dataset, including missing values (NA), we can summarize the dataset with the skim function in the skimr package. As seen below, there are 43 character columns, and 38 numeric columns. There are a total of 1460 rows in the dataframe. Some highlights from the skim summary:
 
-
-```{r eval = TRUE, echo=TRUE, comment=NA, warning=FALSE, message=FALSE,results='markup'}
-test$SalePrice<-rep(NA,1459)
-house<-bind_rows(train,test)
-
-## Data Exploration
-
-str(house)
-
-```
 Then we will check the data types and correct any that are the wrong type.
 We also notice that the variable MSSubClass was parsed as numeric, but it is actually a categorical variables so it must be converted to a character variable. The variables OverallQual and OverallCond are also categorical, even though they seem numeric variables with a meaninful order. However, since there is no sense of the relative distance between rankings, we must convert them to character variables. Same reasoning applies to variables involving year and month in numeric form: YearBuilt, YearRemodAdd, GarageYrBlt, MoSold, YrSold. Also, the Id variable is just an index column and we will make this explicit.
 
@@ -115,6 +105,8 @@ We also notice that the variable MSSubClass was parsed as numeric, but it is act
 # Section 3: Data Visualisation
 
 ```{r eval = TRUE, echo=TRUE, comment=NA, warning=FALSE, message=FALSE,results='markup'}
+
+# Don't forget to add stuff here
 
 ```
 
@@ -125,13 +117,13 @@ Character variables Alley, FireplaceQu, PoolQC, Fence, MiscFeature have >50% emp
 Combining train and test data for quicker data prep
 
 ```{r, message=FALSE, warning=FALSE}
-test$SalePrice <- NA
-train$isTrain <- 1
-test$isTrain <- 0
+test$SalePrice <- NA  #Because we need both data sets to be the same length
+train$isTrain <- 1  #This way we'll know what is what
+test$isTrain <- 0  #This way we'll know what is what
 house <- rbind(train,test)
 ```
 
-## MasVnrArea
+## MasVnrArea !!!!! we might want to change this
 
 ```{r, message=FALSE, warning=FALSE}
 house$MasVnrArea[which(is.na(house$MasVnrArea))] <- mean(house$MasVnrArea,na.rm=T)
@@ -366,7 +358,7 @@ str(house)
 ```
 
 
-Taking all the column classes in one variable so as to seperate factors from numerical variables.
+Taking all the column classes in one variable so as to separate factors from numerical variables.
 
 ```{r, message=FALSE, warning=FALSE}
 Column_classes <- sapply(names(house),function(x){class(house[[x]])})
@@ -393,14 +385,76 @@ nrow(train_new)
 nrow(validate)
 str(validate)
 ```
+## 5.....Missing Value
 
+```{r, message=FALSE, warning=FALSE}
+# Looking at the distribution and summary of the target variable
+
+summary(train$SalePrice)
+
+quantile(train$SalePrice)
+
+# Conclusion: From summary, it was observed that minimum price is greater than 0
+
+## Histogram for target variable
+
+hist(train$SalePrice)
+
+## Conclusion: From Histogram, we could see that it deviates from normal distribution and has positive skewness.
+
+
+# Plotting 'GrLivArea' too see if there are any outliers
+
+ggplot(train,aes(y=SalePrice,x=GrLivArea))+geom_point()
+summary(train$GrLivArea)
+
+# There are outliers in 'GrLivArea' field. Let's remove those outliers.
+
+train <- train[train$GrLivArea<=4000,]
+```
+
+## ?. Check correlations
+TODO
 
 ## 7.....Build the model
 
 ```{r, message=FALSE, warning=FALSE}
-library(randomForest)
-house_model <- randomForest(SalePrice~.,
-                            data = train_new)
+
+# TODO: Try the following 
+# Lasso - good start and try different values for penalisation parameter Beta. Vary the parameter and see which variables get dropped - these may be a candidate for dropping.
+# Linear regression
+# Log data linear regression
+
+#----------Random Forest------------------------
+#library(randomForest)
+#house_model <- randomForest(SalePrice~.,
+#                            data = train_new)
+
+#----------XGBoost------------------------
+# 
+
+library(xgboost)
+library(caret)
+library(ROCR)
+library(lift)
+
+training.x <-model.matrix(SalePrice~ ., data = train_new)
+testing.x <-model.matrix(SalePrice~ ., data = train_new)
+
+model_XGboost<-xgboost(data = data.matrix(training.x[,-1]), 
+                       label = as.numeric(as.character(train_new$SalePrice)), 
+                       eta = 0.1,       # hyperparameter: learning rate 
+                       max_depth = 20,  # hyperparameter: size of a tree in each boosting iteration
+                       nround=50,       # hyperparameter: number of boosting iterations  
+                       objective = "reg:squarederror"
+                       )
+XGboost_prediction
+
+#----------GLM------------------------
+
+#house_model <- glm(SalePrice~.,
+#                            data = train_new)
+
 ```
 
 ## 8...Variable importance
