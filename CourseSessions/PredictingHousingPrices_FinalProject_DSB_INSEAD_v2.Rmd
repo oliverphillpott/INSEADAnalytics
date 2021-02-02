@@ -45,8 +45,9 @@ library('gridExtra')
 library('corrplot') 
 library('GGally')
 library('e1071')
-install.packages("corrplot")
-
+library('caret')
+library('glmnet')
+install.packages("tidyverse")
 ```
 
 # Section 1: The Business Context
@@ -128,8 +129,8 @@ hist(train$SalePrice) #histogram of sales prices of houses
 
 #histogram shows us that the price of houses is skewed towards the left, with most houses being sold for under $200,000
 
-houses.train<-subset(train, Id<=1000)
-houses.predict<-subset(train, Id>=1000)
+houses.train<-subset(train, Id<=1100)
+houses.predict<-subset(train, Id>=1100)
 
 fit<-lm(SalePrice ~ MSSubClass+LotFrontage+LotArea+OverallQual+OverallCond+YearBuilt+YearRemodAdd+MasVnrArea+BsmtFinSF1+BsmtFinSF2+BsmtUnfSF+TotalBsmtSF+X1stFlrSF+X2ndFlrSF+GrLivArea+BsmtFullBath+BsmtHalfBath+FullBath+HalfBath+BedroomAbvGr+KitchenAbvGr+TotRmsAbvGrd+Fireplaces+GarageYrBlt+GarageArea+WoodDeckSF+OpenPorchSF, data=houses.train)
 
@@ -151,6 +152,27 @@ library(corrplot) #call the library that will be used to plot the correlation ma
 res <- cor(outTRAIN) #compute the correlation matrix in our training data and do case-wise deletion of missing variables
 round(res, 4) #make sure that the values in our correlation matrix are rounded to 4 decimal places
 
+
+##Will now assess quality of the model by performing cross-validation and calculating the MAPE ##
+
+houses.data.test<-subset(train, (Id >= 800 & Id <= 1090))
+houses.data.train<-subset(train, Id <= 800) #redefine the training data
+
+fit <- lm(SalePrice ~ MSSubClass+LotFrontage+LotArea+OverallQual+OverallCond+YearBuilt+YearRemodAdd+MasVnrArea+BsmtFinSF1+BsmtFinSF2+BsmtUnfSF+TotalBsmtSF+X1stFlrSF+X2ndFlrSF+GrLivArea+BsmtFullBath+BsmtHalfBath+FullBath+HalfBath+BedroomAbvGr+KitchenAbvGr+TotRmsAbvGrd+Fireplaces+GarageYrBlt+GarageArea+WoodDeckSF+OpenPorchSF, data = houses.data.train)
+
+predicted.prices.testing<-predict(fit, houses.data.test) #predict the prices of the 1000 diamonds left for testing the model
+
+
+percent.errors <- abs((houses.data.test$SalePrice-predicted.prices.testing)/houses.data.test$Price)*100 #calculate absolute percentage errors
+
+
+#fit.log <- lm(log(SalePrice ~ MSSubClass+LotFrontage+LotArea+OverallQual+OverallCond+YearBuilt+YearRemodAdd+MasVnrArea+BsmtFinSF1+BsmtFinSF2+BsmtUnfSF+TotalBsmtSF+X1stFlrSF+X2ndFlrSF+GrLivArea+BsmtFullBath+BsmtHalfBath+FullBath+HalfBath+BedroomAbvGr+KitchenAbvGr+TotRmsAbvGrd+Fireplaces+GarageYrBlt+GarageArea+WoodDeckSF+OpenPorchSF, data = houses.data.train))
+
+#predicted.prices.testing.log<-predict(fit, houses.data.test) 
+
+#percent.errors.log <- abs((houses.data.test$SalePrice-predicted.prices.testing.log)/houses.data.test$Price)*100 #calculate absolute percentage errors
+
+#mean(percent.errors.log) 
 
 
 ```
@@ -433,11 +455,6 @@ ncol(validate)
 str(validate)
 ```
 
-## ?. Check correlations & data visualiztion
-```{r, message=FALSE, warning=FALSE}
-# MARCELO
-```
-
 ## 5.....TODO - need to decide what to do here
 
 ```{r, message=FALSE, warning=FALSE}
@@ -476,7 +493,27 @@ train <- train[train$GrLivArea<=4000,]
 
 ## ?. LASSO
 ```{r, message=FALSE, warning=FALSE}
-# XXX
+# Marcelo's work
+set.seed(400)
+
+#Splitting the data into training and test set
+
+training.samples <- train$SalePrice %>%
+  createDataPartition(p = 0.8, list = FALSE)
+train.data <- train[training.samples, ]
+test.data <- train[training.samples, ]
+
+#predictor variables
+##ERROR x <- model.matrix(SalePrice~., train.data)[,-1]
+#outcome variable
+##ERROR y <- train.data$SalePrice
+
+#compute penalized linear regression models
+## NOT YET RUN cv <- cv.glmnet(x, y, alpha = 0)
+#NOT YET RUN cv$lambda.min
+
+
+
 ```
 
 ## ?. Random Forrest
