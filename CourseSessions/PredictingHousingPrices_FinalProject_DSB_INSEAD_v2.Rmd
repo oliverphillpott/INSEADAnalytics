@@ -413,18 +413,42 @@ summary(train$GrLivArea)
 train <- train[train$GrLivArea<=4000,]
 ```
 
+## ?. Check correlations
+TODO
 
 ## 7.....Build the model
 
 ```{r, message=FALSE, warning=FALSE}
+
+# TODO: Try the following 
+# Lasso - good start and try different values for penalisation parameter Beta. Vary the parameter and see which variables get dropped - these may be a candidate for dropping.
+# Linear regression
+# Log data linear regression
+
 #----------Random Forest------------------------
-library(randomForest)
-house_model <- randomForest(SalePrice~.,
-                            data = train_new)
+#library(randomForest)
+#house_model <- randomForest(SalePrice~.,
+#                            data = train_new)
 
 #----------XGBoost------------------------
+# 
 
-#library(xgboost)
+library(xgboost)
+library(caret)
+library(ROCR)
+library(lift)
+
+training.x <-model.matrix(SalePrice~ ., data = train_new)
+testing.x <-model.matrix(SalePrice~ ., data = train_new)
+
+model_XGboost<-xgboost(data = data.matrix(training.x[,-1]), 
+                       label = as.numeric(as.character(train_new$SalePrice)), 
+                       eta = 0.1,       # hyperparameter: learning rate 
+                       max_depth = 20,  # hyperparameter: size of a tree in each boosting iteration
+                       nround=50,       # hyperparameter: number of boosting iterations  
+                       objective = "reg:squarederror"
+                       )
+XGboost_prediction
 
 #----------GLM------------------------
 
