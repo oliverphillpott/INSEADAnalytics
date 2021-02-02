@@ -1,3 +1,13 @@
+# To-Do's
+# 1) Separate Training data (80/20)
+# 2) Do correlation + data visualization analysis
+# 3) Explore different models:
+#       a) Linear (with log)
+#       b) Lasso (with log)
+#       c) random forest
+#       d) xgboost
+
+
 ---
 title: "DSB_Group1_FinalProjectProposal"
 author: "Marcelo De Rada Ocampo, Ollie Phillpot, Miguel Lucas, Prathamesh Dole, Harshul Lilani"
