@@ -1,5 +1,5 @@
 # To-Do's
-# 1) Separate Training data (80/20)
+# 1) Separate Training data (80/20) -> DONE
 # 2) Do correlation + data visualization analysis
 # 3) Explore different models:
 #       a) Linear (with log)
@@ -385,17 +385,25 @@ smp_size <- floor(0.75 * nrow(train))
 ## setting the seed to make the partition reproducible
 
 set.seed(123)
-train_ind <- sample(seq_len(nrow(train)), size = smp_size)
+train_ind <- sample(seq_len(nrow(train)), size = smp_size) 
 
-train_new <- train[train_ind, ]
-validate <- train[-train_ind, ]
+train_new <- train[train_ind, ] # this is what we should use to train
+validate <- train[-train_ind, ] # this is what we should use to validate
 train_new <- subset(train_new,select=-c(Id,isTrain))
 validate <- subset(validate,select=-c(Id,isTrain))
 nrow(train_new)
 nrow(validate)
+ncol(train_new)
+ncol(validate)
 str(validate)
 ```
-## 5.....Missing Value
+
+## ?. Check correlations & data visualiztion
+```{r, message=FALSE, warning=FALSE}
+# MARCELO
+```
+
+## 5.....TODO - need to decide what to do here
 
 ```{r, message=FALSE, warning=FALSE}
 # Looking at the distribution and summary of the target variable
@@ -413,7 +421,7 @@ hist(train$SalePrice)
 ## Conclusion: From Histogram, we could see that it deviates from normal distribution and has positive skewness.
 
 
-# Plotting 'GrLivArea' too see if there are any outliers
+# Plotting 'GrLivArea' too see if there are any outliers !!!! Consider moving this earlier TODO
 
 ggplot(train,aes(y=SalePrice,x=GrLivArea))+geom_point()
 summary(train$GrLivArea)
@@ -423,51 +431,47 @@ summary(train$GrLivArea)
 train <- train[train$GrLivArea<=4000,]
 ```
 
-## ?. Check correlations
-TODO
 
 ## 7.....Build the model
 
+## ?. Linear
 ```{r, message=FALSE, warning=FALSE}
-
-# TODO: Try the following 
-# Lasso - good start and try different values for penalisation parameter Beta. Vary the parameter and see which variables get dropped - these may be a candidate for dropping.
-# Linear regression
-# Log data linear regression
-
-#----------Random Forest------------------------
-#library(randomForest)
-#house_model <- randomForest(SalePrice~.,
-#                            data = train_new)
-
-#----------XGBoost------------------------
-# 
-
-library(xgboost)
-library(caret)
-library(ROCR)
-library(lift)
-
-training.x <-model.matrix(SalePrice~ ., data = train_new)
-testing.x <-model.matrix(SalePrice~ ., data = train_new)
-
-model_XGboost<-xgboost(data = data.matrix(training.x[,-1]), 
-                       label = as.numeric(as.character(train_new$SalePrice)), 
-                       eta = 0.1,       # hyperparameter: learning rate 
-                       max_depth = 20,  # hyperparameter: size of a tree in each boosting iteration
-                       nround=50,       # hyperparameter: number of boosting iterations  
-                       objective = "reg:squarederror"
-                       )
-XGboost_prediction
-
-#----------GLM------------------------
-
-#house_model <- glm(SalePrice~.,
-#                            data = train_new)
-
+# XXX
 ```
 
-## 8...Variable importance
+## ?. LASSO
+```{r, message=FALSE, warning=FALSE}
+# XXX
+```
+
+## ?. Random Forrest
+```{r, message=FALSE, warning=FALSE}
+ library(randomForest)
+ house_model <- randomForest(SalePrice~.,
+                            data = train_new)
+```
+
+## ?. xgBOOST
+```{r, message=FALSE, warning=FALSE}
+#library(xgboost)
+#library(caret)
+#library(ROCR)
+#library(lift)
+
+#training.x <-model.matrix(SalePrice~ ., data = train_new)
+#testing.x <-model.matrix(SalePrice~ ., data = train_new)
+
+#model_XGboost<-xgboost(data = data.matrix(training.x[,-1]), 
+ #                      label = as.numeric(as.character(train_new$SalePrice)), 
+  #                     eta = 0.1,       # hyperparameter: learning rate 
+   #                    max_depth = 20,  # hyperparameter: size of a tree in each boosting iteration
+    #                   nround=50,       # hyperparameter: number of boosting iterations  
+     #                  objective = "reg:squarederror"
+      #                 )
+#XGboost_prediction
+```
+
+## 8...Variable importance TODO (this is only for random forrest)
 
 Get importance
 
@@ -481,7 +485,7 @@ varImpPlot(house_model)
 ```{r, message=FALSE, warning=FALSE}
 # Predict using the test set
 
-prediction <- predict(house_model,test)
+prediction <- predict(house_model,validate)
 
 # Evaluation RMSE function
 
@@ -502,6 +506,9 @@ RMSE1 <- round(RMSE1, digits = 5)
 Output file
 
 ```{r, message=FALSE, warning=FALSE}
+
+prediction <- predict(house_model,test)
+
 prediction[which(is.na(prediction))] <- mean(prediction,na.rm=T)
 submit <- data.frame(Id=test$Id,SalePrice=prediction)
 write.csv(submit,file="House_Price_Output.csv",row.names=F)
