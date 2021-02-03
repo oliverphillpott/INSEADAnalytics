@@ -47,7 +47,7 @@ library('GGally')
 library('e1071')
 library('caret')
 library('glmnet')
-install.packages("tidyverse")
+#install.packages("tidyverse")
 ```
 
 # Section 1: The Business Context
@@ -523,24 +523,58 @@ test.data <- train[training.samples, ]
                             data = train_new)
 ```
 
-## ?. xgBOOST
+## ?. XGBoost
 ```{r, message=FALSE, warning=FALSE}
-#library(xgboost)
-#library(caret)
-#library(ROCR)
-#library(lift)
-
-#training.x <-model.matrix(SalePrice~ ., data = train_new)
-#testing.x <-model.matrix(SalePrice~ ., data = train_new)
+library(xgboost)
+library(caret)
+library(ROCR)
+library(lift)
 
 #model_XGboost<-xgboost(data = data.matrix(training.x[,-1]), 
- #                      label = as.numeric(as.character(train_new$SalePrice)), 
-  #                     eta = 0.1,       # hyperparameter: learning rate 
-   #                    max_depth = 20,  # hyperparameter: size of a tree in each boosting iteration
-    #                   nround=50,       # hyperparameter: number of boosting iterations  
-     #                  objective = "reg:squarederror"
-      #                 )
-#XGboost_prediction
+#                       label = as.numeric(as.character(train_new$SalePrice)), 
+#                       eta = 0.1,       # hyperparameter: learning rate 
+#                       max_depth = 20,  # hyperparameter: size of a tree in each boosting iteration
+#                       nround=50,       # hyperparameter: number of boosting iterations  
+#                       objective = "reg:squarederror"
+#                       )
+
+
+training_xgb <-model.matrix(SalePrice~ ., data = train_new)
+validate_xgb <-model.matrix(SalePrice~ ., data = validate)
+#test_xgb <- subset(test,select=-c(Id,isTrain))
+test_xgb <- model.matrix(SalePrice~ ., data = test)
+
+training_xgb <- xgb.DMatrix(data = as.matrix(training_xgb), label= train_new$SalePrice)
+validate_xgb <- xgb.DMatrix(data = as.matrix(validate_xgb))
+test_xgb <- xgb.DMatrix(data = as.matrix(test_xgb))
+
+default_param<-list(
+  objective = "reg:squarederror",
+  booster = "gbtree",
+  eta=0.1, #default = 0.3
+  gamma=0,
+  max_depth=20, #default=6
+  min_child_weight=1, #default=1
+  subsample=1,
+  colsample_bytree=1
+)
+
+xgbcv <- xgb.cv( params = default_param, data = training_xgb, 
+                 nrounds = 50, nfold = 5, showsd = T, 
+                 stratified = T, print_every_n = 40, 
+                 early_stopping_rounds = 10, maximize = F)
+
+xgb_mod <- xgb.train(data = training_xgb, params=default_param, nrounds = 50)
+
+xgb_pred <- predict(xgb_mod, validate_xgb)
+
+xgb_pred
+
+xgb_pred <- predict(xgb_mod, test_xgb)
+
+xgb_pred
+
+
 ```
 
 ## 8...Variable importance TODO (this is only for random forrest)
