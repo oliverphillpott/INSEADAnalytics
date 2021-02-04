@@ -546,7 +546,7 @@ test_xgb <- model.matrix(SalePrice~ ., data = test_xgb)
 
 training_xgb <- xgb.DMatrix(data = as.matrix(training_xgb), label= train_new$SalePrice)
 validate_xgb <- xgb.DMatrix(data = as.matrix(validate_xgb))
-test_xgb <- xgb.DMatrix(data = as.matrix(test_xgb))
+#test_xgb_matrix <- xgb.DMatrix(data = as.matrix(test_xgb))
 
 # Tune these parameters to minimse RMSE
 default_param<-list(
@@ -562,7 +562,7 @@ default_param<-list(
 
 # Run cross validation
 xgbcv <- xgb.cv( params = default_param, data = training_xgb, 
-                 nrounds = 1000, nfold = 5, showsd = T, 
+                 nrounds = 50, nfold = 5, showsd = T, 
                  stratified = T, print_every_n = 10, 
                  early_stopping_rounds = 10, maximize = F)
 
