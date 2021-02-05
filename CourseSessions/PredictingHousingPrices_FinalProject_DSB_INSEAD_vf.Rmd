@@ -1,0 +1,519 @@
+---
+title: "DSB_Group1_FinalProjectProposal"
+author: "Marcelo De Rada Ocampo, Ollie Phillpot, Miguel Lucas, Prathamesh Dole, Harshul Lilani"
+output:
+  html_document:
+    css: ../AnalyticsStyles/default.css
+    theme: paper
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+  pdf_document:
+    includes:
+      in_header: ../AnalyticsStyles/default.sty
+always_allow_html: yes
+---
+
+# Section 0: Download library/ package
+
+Setup code.
+
+```{r, message=FALSE, warning=FALSE}
+
+library('ggplot2')
+library('ggthemes') 
+library('scales')
+library('dplyr') 
+library('mice')
+library('randomForest')
+library('data.table')
+library('gridExtra')
+library('corrplot') 
+library('GGally')
+library('e1071')
+library('caret')
+library('glmnet')
+#install.packages("tidyverse")
+```
+
+# Section 1: The Business Context
+Generally the largest investment of a person's life is buying a house. It is an emotional affair and people often overpay. There are also many small businesses that build and sell residential housing, but the construction industry is exceedingly slow to adopt new technological practices. When buying or selling property it is considered advantageous to know the area to develop a "feel" for sale prices. This is unscientific and we believe there is much room for optimisation.
+
+We will participate in this Kaggle competion for a personal reason and a business reason:
+1. Miguel is currently looking to buy a house and would like to know a model that serves as a guide to determining a good price.
+2. Ollie is a shareholder in his father's housing development company, which has recently completed a project and is looking for its next investment opportunity. This project will be used to identify possible features that could add significant value to the next project and improve ROI.
+
+The Kaggle competition can be found [here](https://www.kaggle.com/c/house-prices-advanced-regression-techniques).
+
+<hr>\clearpage
+
+# Section 2: Data Introduction
+(Data source: https://www.kaggle.com/c/house-prices-advanced-regression-techniques/data?select=train.csv. We acknowledge the following:
+DeCock, Dean. (2011). UCI Machine Learning Repository [http://jse.amstat.org/v19n3/decock.pdf]. Ames, Iowa: Alternative to the Boston Housing Data as an End of Semester Regression Project at Truman State University.)
+
+The data set has been generated as an alternative for data scientists looking for a modernized and expanded version of the often cited Boston Housing dataset. The following is an example of the data/ data library:
+
+With 79 explanatory variables describing (almost) every aspect of residential homes in Ames, Iowa, this competition challenges participants to predict the final price of each home.
+
+
+## Read the training and testing data
+
+``` {r, message=FALSE, warning=FALSE}
+
+train <-read.csv("../DATA/HousingData_Train.csv", stringsAsFactors = F)
+test  <-read.csv("../DATA/HousingData_Test.csv", stringsAsFactors = F)
+
+```
+
+# Section 3: Check the data
+
+In order to gain further insights into the structure of the dataset, including missing values (NA), we can summarize the dataset with the skim function in the skimr package. As seen below, there are 43 character columns, and 38 numeric columns. There are a total of 1460 rows in the dataframe.
+
+``` {r, message=FALSE, warning=FALSE}
+## Structure of the data
+
+dim(train)
+str(train)
+
+dim(test)
+str(test)
+
+#Count the number of columns that consists of text data
+
+sum(sapply(train[,1:81], typeof) == "character")
+
+sum(sapply(train[,1:81], typeof) == "integer")
+
+summary(train[,sapply(train[,1:81], typeof) == "integer"])
+
+```
+
+
+## Data Visualisation
+
+With the boxplot (though the column labels overlap somewhat) we can see that: neighbourhoods and sale price shows that BrookSide and South & West of Iowa State University have cheaper houses. On the other extreme, Northridge and Heights are rich neighboorhoos with several outliers in terms of price.
+
+Additionally, with the SalePrice ~ LotArea graph we can see that there are several outliers that could get in the way of our prediction accuracy (mainly values over 700,000 and Lots with an area of 100,000 ft or more).
+
+Density plots indicate that the features are skewed. The denisty plot for YearBuilt shows that the data set contains a mix of new and old houses. It shows a downturn in the number of houses in recent years, possibily due to the housing crisis.
+
+Character variables Alley, FireplaceQu, PoolQC, Fence, MiscFeature and all Garage variables have >40% empty values so we will create dummy variables for them in the next section. The missing values indicate that majority of the houses have no alley access, no pool, no fence and no elevator, no 2nd garage, no shed and no tennis court that is covered by the MiscFeature.
+
+```{r, message=FALSE, warning=FALSE}
+
+
+cat_var <- names(train)[which(sapply(train, is.character))]
+cat_car <- c(cat_var, 'BedroomAbvGr', 'HalfBath', ' KitchenAbvGr','BsmtFullBath', 'BsmtHalfBath', 'MSSubClass')
+numeric_var <- names(train)[which(sapply(train, is.numeric))]
+
+
+## Creating one training dataset with categorical variable and one with numeric variable. We will use this for data visualization.
+
+train1_cat<-train[cat_var]
+train1_num<-train[numeric_var]
+
+## Bar plot/Density plot function
+
+## Bar plot function
+
+plotHist <- function(data_in, i) 
+{
+  data <- data.frame(x=data_in[[i]])
+  p <- ggplot(data=data, aes(x=factor(x))) + stat_count() + xlab(colnames(data_in)[i]) + theme_light() + 
+    theme(axis.text.x = element_text(angle = 90, hjust =1))
+  return (p)
+}
+
+## Density plot function
+
+plotDen <- function(data_in, i){
+  data <- data.frame(x=data_in[[i]], SalePrice = data_in$SalePrice)
+  p <- ggplot(data= data) + geom_line(aes(x = x), stat = 'density', size = 1,alpha = 1.0) +
+    xlab(paste0((colnames(data_in)[i]), '\n', 'Skewness: ',round(skewness(data_in[[i]], na.rm = TRUE), 2))) + theme_light() 
+  return(p)
+  
+}
+
+## Function to call both Bar plot and Density plot function
+
+doPlots <- function(data_in, fun, ii, ncol=3) 
+{
+  pp <- list()
+  for (i in ii) {
+    p <- fun(data_in=data_in, i=i)
+    pp <- c(pp, list(p))
+  }
+  do.call("grid.arrange", c(pp, ncol=ncol))
+}
+
+
+## Barplots for the categorical features
+
+doPlots(train1_cat, fun = plotHist, ii = 1:4, ncol = 2)
+doPlots(train1_cat, fun = plotHist, ii  = 5:8, ncol = 2)
+doPlots(train1_cat, fun = plotHist, ii = 9:12, ncol = 2)
+doPlots(train1_cat, fun = plotHist, ii = 13:18, ncol = 2)
+doPlots(train1_cat, fun = plotHist, ii = 19:22, ncol = 2)
+ggplot(train, aes(x = Neighborhood, y = SalePrice)) +
+  geom_boxplot() +
+  geom_hline(aes(yintercept=80), 
+             colour='red', linetype='dashed', lwd=2) +
+  scale_y_continuous(labels=dollar_format()) +
+  theme_few()
+
+plot(SalePrice ~ LotArea, data= train)  #plot of Sale Price vs. Lot Area in training data
+plot(SalePrice ~ YearBuilt, data= train) #plot of Sale Price vs. Year that the house was built in training data
+plot(SalePrice ~ YearRemodAdd, data= train) #plot of Sale Price vs. Year the house was last remodelede in training data
+hist(train$SalePrice) #histogram of sales prices of houses
+
+#histogram shows us that the price of houses is skewed towards the left, with most houses being sold for under $200,000
+
+# Density plots
+
+doPlots(train1_num, fun = plotDen, ii = 2:6, ncol = 2)
+doPlots(train1_num, fun = plotDen, ii = 7:12, ncol = 2)
+doPlots(train1_num, fun = plotDen, ii = 13:17, ncol = 2)
+ggplot(train,aes(y=SalePrice,x=GrLivArea))+geom_point()
+
+# There are outliers in 'GrLivArea' field. Let's remove those outliers.
+
+# train <- train[train$GrLivArea<=4000,] #omitted because it doesn't make any difference
+
+# Explore correlations
+
+correlations <- cor(na.omit(train1_num[,-1]))
+row_indic <- apply(correlations, 1, function(x) sum(x > 0.3 | x < -0.3) > 1)
+correlations<- correlations[row_indic ,row_indic ]
+corrplot(correlations, method="square")
+
+misscols<-sapply(train, function(x)all(any(is.na(x))))
+colswithmiss <-names(misscols[misscols>0]);
+x = data.frame(train[,colswithmiss])
+PercentMissingData<-apply(x, 2, function(col)sum(is.na(col))/length(col))
+missing.char<-as.data.table(PercentMissingData,keep.rownames = "Column")
+print(missing.char)
+
+
+```
+
+
+# Section 4: Data Cleansing
+
+Combining train and test data for quicker data prep.
+
+## Data pre-processing
+
+```{r}
+
+train <-read.csv("../DATA/HousingData_Train.csv", stringsAsFactors = F)
+test  <-read.csv("../DATA/HousingData_Test.csv", stringsAsFactors = F)
+
+## Save the ID column so that we can drop it from merged dataset (combi)
+train_ID=train$Id
+test_ID=test$Id
+
+## test doesn't have SalePrice column, so add it.
+test$SalePrice=NA
+```
+
+**Removing outliers** - A scatterplot between SalePrice and GrLivArea shows a couple of outliers. Let us get rid of them.
+
+```{r, message=FALSE, warning=FALSE}
+library(ggplot2)
+qplot(train$GrLivArea,train$SalePrice,main="With Outliers")
+train<-train[-which(train$GrLivArea>4000 & train$SalePrice<300000),]
+
+## Check again after removal.
+qplot(train$GrLivArea,train$SalePrice,main="Without Outliers")
+```
+
+**Log Transformation of SalePrice Variable** - In order to make the distribution of the target variable normal, we need to transform it by taking log.
+
+```{r, message=FALSE, warning=FALSE}
+## Plot histogram of SalePrice Variable - Right skewed
+qplot(SalePrice,data=train,bins=50,main="Right skewed distribution")
+
+## Log transformation of the target variable
+train$SalePrice <- log(train$SalePrice + 1)
+
+## Normal distribution after transformation
+qplot(SalePrice,data=train,bins=50,main="Normal distribution after log transformation")
+```
+
+**Combine train and test datasets**.
+
+```{r, message=FALSE, warning=FALSE}
+## Combine train and test
+combi=rbind(train,test)
+
+## Dropping Id as it is unnecessary for the prediction process.
+combi=combi[,-1]
+```
+
+
+## Imputing Missing data
+
+We will be handling each variable separately. 
+
+1. For most of the **categorical features**, NA values will be imputed as **'None'**, because referring to the **data_description.txt** file from Kaggle, **the NA of these variables represent values such as 'No Garage','No Basement', etc.**
+
+2. For most of the **numerical features**, NA values will be replaced by 0, e.g. variables like GarageArea, GarageCars, etc.
+
+3. For some categorical features like Functional and Electrical, the NA values will be replaced by the most frequently occuring value for that variable.
+
+```{r, message=FALSE, warning=FALSE}
+## For some variables, fill NA with "None" 
+for(x in c("Alley","PoolQC","MiscFeature","Fence","FireplaceQu","GarageType","GarageFinish","GarageQual",'GarageCond','BsmtQual', 'BsmtCond', 'BsmtExposure', 'BsmtFinType1', 'BsmtFinType2',"MasVnrType")){
+        combi[is.na(combi[,x]),x]="None"
+}
+
+#Group by neighborhood and fill in missing value by the median LotFrontage of all the neighborhood
+temp=aggregate(LotFrontage~Neighborhood,data=combi,median)
+temp2=c()
+for(str in combi$Neighborhood[is.na(combi$LotFrontage)]){temp2=c(temp2,which(temp$Neighborhood==str))}
+combi$LotFrontage[is.na(combi$LotFrontage)]=temp[temp2,2]
+
+## Replacing missing data with 0
+for(col in c('GarageYrBlt', 'GarageArea', 'GarageCars','BsmtFinSF1', 'BsmtFinSF2', 'BsmtUnfSF','TotalBsmtSF', 'BsmtFullBath', 'BsmtHalfBath',"MasVnrArea")){
+        combi[is.na(combi[,col]),col]=0
+}
+
+## Replace missing MSZoning values by "RL"
+combi$MSZoning[is.na(combi$MSZoning)]="RL"
+
+## Remove Utilities as it has zero variance
+combi=combi[,-9]
+
+## Replace missing Functional values with "Typ"
+combi$Functional[is.na(combi$Functional)]="Typ"
+
+## Replace missing Electrical values with "SBrkr"
+combi$Electrical[is.na(combi$Electrical)]="SBrkr"
+
+## Replace missing KitchenQual values by "TA"
+combi$KitchenQual[is.na(combi$KitchenQual)]="TA"
+
+## Replace missing SaleType values by "WD"
+combi$SaleType[is.na(combi$SaleType)]="WD"
+
+## Replace missing Exterior1st and Exterior2nd values by "VinylSd"
+combi$Exterior1st[is.na(combi$Exterior1st)]="VinylSd"
+combi$Exterior2nd[is.na(combi$Exterior2nd)]="VinylSd"
+
+## All NAs should be gone, except the test portion of SalePrice variable, which we ourselves had initialized to NA earlier.
+colSums(is.na(combi))
+```
+
+## Transforming some numerical variables that are really categorical
+
+```{r, message=FALSE, warning=FALSE}
+combi$MSSubClass=as.character(combi$MSSubClass)
+combi$OverallCond=as.character(combi$OverallCond)
+combi$YrSold=as.character(combi$YrSold)
+combi$MoSold=as.character(combi$MoSold)
+```
+
+## Label Encoding some categorical variables that may contain information in their ordering set
+
+**We will also specify the order of the levels (mapping), while label encoding (converting categories to integer ranks - 1 to n) the categorical variables.**
+
+```{r, message=FALSE, warning=FALSE}
+cols = c('FireplaceQu', 'BsmtQual', 'BsmtCond', 'GarageQual', 'GarageCond', 'ExterQual', 'ExterCond','HeatingQC', 'PoolQC', 'KitchenQual', 'BsmtFinType1', 'BsmtFinType2', 'Functional', 'Fence', 'BsmtExposure', 'GarageFinish', 'LandSlope','LotShape', 'PavedDrive', 'Street', 'Alley', 'CentralAir', 'MSSubClass', 'OverallCond', 'YrSold', 'MoSold')
+
+FireplaceQu=c('None','Po','Fa','TA','Gd','Ex')
+BsmtQual=c('None','Po','Fa','TA','Gd','Ex')
+BsmtCond=c('None','Po','Fa','TA','Gd','Ex')
+GarageQual=c('None','Po','Fa','TA','Gd','Ex')
+GarageCond=c('None','Po','Fa','TA','Gd','Ex')
+ExterQual=c('Po','Fa','TA','Gd','Ex')
+ExterCond=c('Po','Fa','TA','Gd','Ex')
+HeatingQC=c('Po','Fa','TA','Gd','Ex')
+PoolQC=c('None','Fa','TA','Gd','Ex')
+KitchenQual=c('Po','Fa','TA','Gd','Ex')
+BsmtFinType1=c('None','Unf','LwQ','Rec','BLQ','ALQ','GLQ')
+BsmtFinType2=c('None','Unf','LwQ','Rec','BLQ','ALQ','GLQ')
+Functional=c('Sal','Sev','Maj2','Maj1','Mod','Min2','Min1','Typ')
+Fence=c('None','MnWw','GdWo','MnPrv','GdPrv')
+BsmtExposure=c('None','No','Mn','Av','Gd')
+GarageFinish=c('None','Unf','RFn','Fin')
+LandSlope=c('Sev','Mod','Gtl')
+LotShape=c('IR3','IR2','IR1','Reg')
+PavedDrive=c('N','P','Y')
+Street=c('Pave','Grvl')
+Alley=c('None','Pave','Grvl')
+MSSubClass=c('20','30','40','45','50','60','70','75','80','85','90','120','150','160','180','190')
+OverallCond=NA
+MoSold=NA
+YrSold=NA
+CentralAir=NA
+levels=list(FireplaceQu, BsmtQual, BsmtCond, GarageQual, GarageCond, ExterQual, ExterCond,HeatingQC, PoolQC, KitchenQual, BsmtFinType1, BsmtFinType2, Functional, Fence, BsmtExposure, GarageFinish, LandSlope,LotShape, PavedDrive, Street, Alley, CentralAir, MSSubClass, OverallCond, YrSold, MoSold)
+i=1
+for (c in cols){
+        if(c=='CentralAir'|c=='OverallCond'|c=='YrSold'|c=='MoSold'){
+                combi[,c]=as.numeric(factor(combi[,c]))}
+        else
+                combi[,c]=as.numeric(factor(combi[,c],levels=levels[[i]]))
+i=i+1
+        }
+```
+
+## Adding an important feature - Total area of basement
+
+```{r, message=FALSE, warning=FALSE}
+combi$TotalSF=combi$TotalBsmtSF+combi$X1stFlrSF+combi$X2ndFlrSF
+```
+
+## Getting dummy categorical features
+
+```{r, message=FALSE, warning=FALSE}
+# first get data type for each feature
+feature_classes <- sapply(names(combi),function(x){class(combi[[x]])})
+numeric_feats <-names(feature_classes[feature_classes != "character"])
+
+# get names of categorical features
+categorical_feats <- names(feature_classes[feature_classes == "character"])
+
+# use caret dummyVars function for hot one encoding for categorical features
+library(caret)
+dummies <- dummyVars(~.,combi[categorical_feats])
+categorical_1_hot <- predict(dummies,combi[categorical_feats])
+```
+
+## Reconstruct all data with pre-processed data.
+
+```{r, message=FALSE, warning=FALSE}
+combi <- cbind(combi[numeric_feats],categorical_1_hot)
+
+## Let us look at the dimensions of combi.
+dim(combi)
+```
+
+## Splitting train dataset further into Training and Validation in order to evaluate the models
+
+```{r, message=FALSE, warning=FALSE}
+training<-combi[1:1458,]
+testing<-combi[1459:2917,]
+set.seed(222)
+inTrain<-createDataPartition(y=training$SalePrice,p=.7,list=FALSE)
+Training<-training[inTrain,]
+Validation<-training[-inTrain,]
+```
+
+# Section 5: Prediction Models
+
+## Section 5.1 - LASSO
+
+```{r, message=FALSE, warning=FALSE}
+
+library(glmnet)
+library(Metrics)
+set.seed(123)
+cv_lasso=cv.glmnet(as.matrix(Training[,-59]),Training[,59])
+
+## Predictions
+prediction<-predict(cv_lasso,newx=as.matrix(Validation[,-59]),s="lambda.min")
+rmse1<-rmse(Validation$SalePrice,prediction)
+RMSE1 <- round(rmse1, digits = 5)
+RMSE1
+
+#Create predictions and output
+
+prediction<-predict(cv_lasso,newx=as.matrix(testing[,-59]),s="lambda.min")
+
+prediction<-exp(prediction) - 1
+
+prediction[which(is.na(prediction))] <- mean(prediction,na.rm=T)
+submit <- data.frame(Id=test$Id,SalePrice=prediction)
+write.csv(submit,file="House_Price_Lasso.csv",row.names=F)
+
+```
+
+# Section 5.2 - Random Forrest
+
+```{r, message=FALSE, warning=FALSE}
+
+ library(randomForest)
+
+train_forrest<-Training[,1:60]
+validate_forrest<-Validation[,1:60]
+test_forrest<-testing[,1:60]
+
+ r_forrest <- randomForest(SalePrice~.,
+                            data = train_forrest)
+
+prediction <- predict(r_forrest,Validation)
+rmse1<-rmse(Validation$SalePrice,prediction)
+RMSE1 <- round(rmse1, digits = 5)
+RMSE1
+
+prediction <- predict(r_forrest,testing)
+prediction<-exp(prediction) - 1
+
+prediction[which(is.na(prediction))] <- mean(prediction,na.rm=T)
+submit <- data.frame(Id=test$Id,SalePrice=prediction)
+write.csv(submit,file="House_Price_RandForrest.csv",row.names=F)
+
+```
+
+# Section 5.3 - XGBoost
+
+```{r, message=FALSE, warning=FALSE}
+
+library(xgboost)
+library(caret)
+library(ROCR)
+library(lift)
+
+train_boost<-Training[,1:60]
+validate_boost<-Validation[,1:60]
+test_boost<-testing[,1:60]
+
+training_xgb <-model.matrix(SalePrice~ ., data = train_boost)
+validate_xgb <-model.matrix(SalePrice~ ., data = validate_boost)
+
+test_boost$SalePrice=0
+test_xgb <- model.matrix(SalePrice~ ., data = test_boost)
+
+training_xgb <- xgb.DMatrix(data = as.matrix(training_xgb), label= Training$SalePrice)
+validate_xgb <- xgb.DMatrix(data = as.matrix(validate_xgb))
+test_xgb_matrix <- xgb.DMatrix(data = as.matrix(test_xgb))
+
+# Tune these parameters to minimse RMSE
+default_param<-list(
+  objective = "reg:squarederror",
+  booster = "gbtree",
+  eta=0.03, #default = 0.3
+  gamma=0.05,
+  max_depth=10, #default=6
+  min_child_weight=1, #default=1
+  subsample=1,
+  colsample_bytree=1
+)
+
+# Run cross validation
+xgbcv <- xgb.cv( params = default_param, data = training_xgb, 
+                 nrounds = 300, nfold = 5, showsd = T, 
+                 stratified = T, print_every_n = 10, 
+                 early_stopping_rounds = 10, maximize = F)
+
+# Train the model
+xgb_mod <- xgb.train(data = training_xgb, params=default_param, nrounds = 300)
+
+
+# Calculate RMSE
+
+prediction <- predict(xgb_mod, validate_xgb)
+rmse1<-rmse(Validation$SalePrice,prediction)
+RMSE1 <- round(rmse1, digits = 5)
+RMSE1
+
+prediction <- predict(xgb_mod, test_xgb)
+prediction<-exp(prediction) - 1
+
+
+prediction[which(is.na(prediction))] <- mean(prediction,na.rm=T)
+submit <- data.frame(Id=test$Id,SalePrice=prediction)
+write.csv(submit,file="House_Price_XGBoost.csv",row.names=F)
+
+```
